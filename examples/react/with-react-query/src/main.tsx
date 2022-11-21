@@ -35,11 +35,11 @@ const indexRoute = rootRoute.createRoute({
 const postsRoute = rootRoute.createRoute({
   path: 'posts',
   component: Posts,
-  errorComponent: () => 'Oh crap!',
+  errorComponent: () => 'Oh crap',
   loader: async () => {
-    queryClient.getQueryData(['posts']) ??
-      (await queryClient.prefetchQuery(['posts'], fetchPosts))
-    return {}
+    return {
+      posts: await queryClient.fetchQuery(['posts'], fetchPosts),
+    }
   },
 })
 
@@ -49,18 +49,18 @@ const postsIndexRoute = postsRoute.createRoute({
 })
 
 const postRoute = postsRoute.createRoute({
-  path: ':postId',
+  path: 'post/:postId',
   component: Post,
   loader: async ({ params: { postId } }) => {
-    queryClient.getQueryData(['posts', postId]) ??
-      (await queryClient.prefetchQuery(['posts', postId], () =>
+    return {
+      post: await queryClient.fetchQuery(['posts', postId], () =>
         fetchPostById(postId),
-      ))
-    return {}
+      ),
+    }
   },
 })
 
-const routeConfig = rootRoute.addChildren([
+const routeConfig = createRouteConfig().addChildren([
   indexRoute,
   postsRoute.addChildren([postsIndexRoute, postRoute]),
 ])
@@ -71,11 +71,11 @@ const router = createReactRouter({
   defaultPreload: 'intent',
 })
 
-// declare module '@tanstack/react-router' {
-//   interface RegisterRouter {
-//     router: typeof router
-//   }
-// }
+declare module '@tanstack/react-router' {
+  interface RegisterRouter {
+    router: typeof router
+  }
+}
 
 const queryClient = new QueryClient()
 
@@ -141,16 +141,6 @@ async function fetchPostById(postId: string) {
     .then((r) => r.data)
 }
 
-function usePosts() {
-  return useQuery(['posts'], fetchPosts)
-}
-
-function usePost(postId: string) {
-  return useQuery(['posts', postId], () => fetchPostById(postId), {
-    enabled: !!postId,
-  })
-}
-
 function Index() {
   return (
     <div>
@@ -160,9 +150,10 @@ function Index() {
 }
 
 function Posts() {
-  const { Link } = useMatch('/posts')
-
-  const postsQuery = usePosts()
+  const {
+    loaderData: { posts },
+    Link,
+  } = useMatch(postsRoute.id)
 
   return (
     <div>
@@ -172,11 +163,11 @@ function Posts() {
           marginRight: '1rem',
         }}
       >
-        {postsQuery.data?.map((post) => {
+        {posts?.map((post) => {
           return (
             <div key={post.id}>
               <Link
-                to="/posts/:postId"
+                to={postRoute.id}
                 params={{
                   postId: post.id,
                 }}
@@ -203,13 +194,15 @@ function PostsIndex() {
 }
 
 function Post() {
-  const { params } = useMatch('/posts/:postId')
-  const postQuery = usePost(params.postId)
+  const {
+    loaderData: { post },
+    params: { postId },
+  } = useMatch(postRoute.id)
 
   return (
     <div>
-      <h4>{postQuery.data?.title}</h4>
-      <p>{postQuery.data?.body}</p>
+      <h4>{post.title}</h4>
+      <p>{post.body}</p>
     </div>
   )
 }
